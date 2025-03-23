@@ -1,0 +1,19 @@
+<!-- This would be part of your existing HTML template file -->
+<!-- This particular snippet is not meant to be a standalone file, but to be included in your templates -->
+
+<!-- Add this somewhere in your base template -->
+<template id="contact-form-template">
+  <div class="contact-form-container p-4 border rounded bg-light mb-3">
+    <h5>Contact Information</h5>
+    <p>Please provide your contact details:</p>
+    <div class="mb-3">
+      <label for="user-email" class="form-label">Email address</label>
+      <input type="email" class="form-control" id="user-email" required>
+    </div>
+    <div class="mb-3">
+      <label for="user-phone" class="form-label">Phone number</label>
+      <input type="tel" class="form-control" id="user-phone" required>
+    </div>
+    <button type="button" class="btn btn-primary" id="submit-contact-info">Submit</button>
+  </div>
+</template>

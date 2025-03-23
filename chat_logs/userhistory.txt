@@ -1,0 +1,3 @@
+USER: Contact information provided: {'email': 'abc@gmail.com', 'phone': ''}
+BOT: Thank you. Your request has been forwarded to our Baggage Services Department. They will contact you at abc@gmail.com within 12 hours.
+

@@ -1,0 +1,240 @@
+{% extends 'base.html' %}
+
+{% if support_message %}
+    <div class="support-message-container">
+        <div class="response-box">
+            {{ support_message }}
+        </div>
+    </div>
+{% endif %}
+
+{% block content %}
+<div class="chat-container">
+    <div class="chat-header">
+        <div class="logo">
+            <h1>SkyWings Airlines Assistant</h1>
+        </div>
+        <div class="header-buttons">
+            <a href="{% url 'logout' %}" class="logout-btn">Logout</a>
+        </div>
+    </div>
+    
+    <div class="chat-body" id="chat-body">
+        <div class="message bot-message">
+            Hello! I'm your SkyWings Airlines virtual assistant. How can I help you today?
+        </div>
+    </div>
+    
+    <div class="chat-input">
+        <input type="text" id="user-input" placeholder="Type your message here..." autocomplete="off">
+        <button class="send-btn" id="send-button">Send</button>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const chatBody = document.getElementById('chat-body');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+        let waitingForSatisfactionResponse = false;
+        let waitingForContactInfo = false;
+        
+        // Focus on input field
+        userInput.focus();
+        
+        // Function to add messages to the chat
+        function addMessage(text, isUser, source = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', isUser ? 'user-message' : 'bot-message');
+            messageDiv.textContent = text;
+            
+            chatBody.appendChild(messageDiv);
+            
+            // If there's a source and it's a bot message, add source info
+            if (source && !isUser && source !== "Support System") {
+                const sourceDiv = document.createElement('div');
+                sourceDiv.classList.add('message', 'bot-message', 'source-info');
+                sourceDiv.style.fontSize = '0.8rem';
+                sourceDiv.style.opacity = '0.8';
+                sourceDiv.style.marginTop = '-5px';
+                sourceDiv.textContent = `Source: ${source}`;
+                chatBody.appendChild(sourceDiv);
+            }
+            
+            chatBody.scrollTop = chatBody.scrollHeight;
+        }
+        
+        // Add typing indicator
+        function showTypingIndicator() {
+            const typingDiv = document.createElement('div');
+            typingDiv.classList.add('typing-indicator');
+            typingDiv.id = 'typing-indicator';
+            
+            for (let i = 0; i < 3; i++) {
+                const dotSpan = document.createElement('span');
+                typingDiv.appendChild(dotSpan);
+            }
+            
+            chatBody.appendChild(typingDiv);
+            chatBody.scrollTop = chatBody.scrollHeight;
+        }
+        
+        // Remove typing indicator
+        function removeTypingIndicator() {
+            const typingIndicator = document.getElementById('typing-indicator');
+            if (typingIndicator) {
+                typingIndicator.remove();
+            }
+        }
+        
+        // Extract contact information from user input
+        function extractContactInfo(text) {
+            let email = '';
+            let phone = '';
+            
+            // Look for email pattern
+            const emailMatch = text.match(/email:?\s*([^\s,]+@[^\s,]+)/i);
+            if (emailMatch && emailMatch[1]) {
+                email = emailMatch[1];
+            }
+            
+            // Look for phone pattern
+            const phoneMatch = text.match(/phone:?\s*([0-9+\-\s]{5,})/i);
+            if (phoneMatch && phoneMatch[1]) {
+                phone = phoneMatch[1].replace(/\s+/g, '');
+            }
+            
+            return { email, phone };
+        }
+        
+        // Handle sending messages
+        function sendMessage() {
+            const text = userInput.value.trim();
+            if (text) {
+                // Add user message to chat
+                addMessage(text, true);
+                userInput.value = '';
+                
+                // Show typing indicator
+                showTypingIndicator();
+                
+                // Check if we're waiting for contact info
+                if (waitingForContactInfo) {
+                    const contactInfo = extractContactInfo(text);
+                    
+                    // If no contact info provided, ask again
+                    if (!contactInfo.email && !contactInfo.phone) {
+                        removeTypingIndicator();
+                        addMessage("I couldn't detect your email or phone number. Please provide them in the format: email: your@email.com, phone: 1234567890", false, "Support System");
+                        return;
+                    }
+                    
+                    // Send contact info to backend
+                    fetch('/handle_satisfaction/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify({ 
+                            query: "NO",
+                            user_data: contactInfo
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        removeTypingIndicator();
+                        addMessage(data.response, false, data.source);
+                        waitingForContactInfo = false;
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        removeTypingIndicator();
+                        addMessage("Sorry, something went wrong. Please try again.", false);
+                        waitingForContactInfo = false;
+                    });
+                    
+                    return;
+                }
+                
+                // Check if we're waiting for a satisfaction response
+                if (waitingForSatisfactionResponse) {
+                    fetch('/handle_satisfaction/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify({ 
+                            query: text
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        removeTypingIndicator();
+                        addMessage(data.response, false, data.source);
+                        waitingForSatisfactionResponse = false;
+                        
+                        // Check if we need contact info
+                        if (data.needs_contact_info) {
+                            waitingForContactInfo = true;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        removeTypingIndicator();
+                        addMessage("Sorry, something went wrong. Please try again.", false);
+                        waitingForSatisfactionResponse = false;
+                    });
+                    
+                    return;
+                }
+                
+                // Regular message flow
+                fetch('/get_response/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({ 
+                        query: text,
+                        output_language: 'English' 
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Remove typing indicator
+                    removeTypingIndicator();
+                    
+                    // Add bot response
+                    addMessage(data.response, false, data.source);
+                    
+                    // If satisfaction prompt should be sent, add it as a separate message after a short delay
+                    if (data.send_satisfaction_prompt) {
+                        setTimeout(() => {
+                            addMessage("Are you satisfied with this response? Please type YES or NO.", false, "Support System");
+                            waitingForSatisfactionResponse = true;
+                        }, 1000); // 1 second delay for a more natural conversation flow
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    removeTypingIndicator();
+                    addMessage("Sorry, something went wrong. Please try again.", false);
+                });
+            }
+        }
+        
+        // Event listeners
+        sendButton.addEventListener('click', sendMessage);
+        
+        userInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    });
+</script>
+{% endblock %}
